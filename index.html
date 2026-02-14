@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cat Adventure: Love Letter Mission</title>
+    <style>
+        /* Reset & Dasar */
+        * { touch-action: none; -webkit-tap-highlight-color: transparent; user-select: none; box-sizing: border-box; }
+        body { margin: 0; background: #1a3310; overflow: hidden; font-family: 'Comic Sans MS', 'Arial', sans-serif; }
+        #game-container { position: relative; width: 100vw; height: 100vh; background: linear-gradient(#87CEEB, #b3e5fc); overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* HUD (Skor & Nyawa) */
+        #hud { 
+            position: absolute; top: 15px; left: 15px; color: white; 
+            font-weight: bold; font-size: 24px; 
+            text-shadow: 2px 2px #000; z-index: 10; 
+        }
+
+        /* --- LAYAR MENANG (WIN SCREEN) --- */
+        #win-screen {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.85);
+            display: none; /* Sembunyi dulu */
+            flex-direction: column; justify-content: center; align-items: center;
+            color: white; z-index: 100; text-align: center; padding: 20px;
+        }
+        #win-box {
+            background: rgba(255,255,255,0.1); padding: 30px; border-radius: 20px;
+            border: 3px solid gold; box-shadow: 0 0 20px gold;
+        }
+        h1 { color: gold; margin: 0 0 10px 0; font-size: 32px; }
+        
+        /* Area Surat & Input Nama */
+        .letter-section {
+            display: flex; flex-direction: column; align-items: center;
+            margin: 20px 0; padding: 15px; background: rgba(255, 192, 203, 0.3); border-radius: 15px;
+        }
+        .envelope-trigger {
+            font-size: 60px; cursor: pointer; transition: transform 0.3s;
+            animation: bounce 2s infinite;
+        }
+        .envelope-trigger:hover { transform: scale(1.2) rotate(-10deg); }
+        .love-text { color: #ff69b4; font-size: 28px; font-weight: bold; margin: 10px 0; text-shadow: 1px 1px white; }
+        .name-input {
+            padding: 12px; border-radius: 10px; border: 2px solid #ff69b4;
+            text-align: center; font-size: 18px; width: 80%; margin-bottom: 10px;
+            font-family: inherit; outline: none;
+        }
+
+        .restart-btn {
+            padding: 15px 40px; font-size: 20px; background: gold; color: black;
+            border: none; border-radius: 50px; cursor: pointer; font-weight: bold;
+            box-shadow: 0 5px #b8860b; transition: 0.2s;
+        }
+        .restart-btn:active { transform: translateY(3px); box-shadow: 0 2px #b8860b; }
+
+        /* --- SURAT YANG DI-ZOOM (POPUP PINK) --- */
+        #zoomed-letter {
+            position: absolute; inset: 0; 
+            background: #ffc0cb; /* Latar pink polos sesuai gambar */
+            display: none; /* Sembunyi dulu */
+            flex-direction: column; justify-content: center; align-items: center;
+            z-index: 200; animation: zoomIn 0.4s ease-out cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .paper-content {
+            background: white; padding: 40px 60px; border-radius: 5px;
+            text-align: center; color: #ff1493;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2), inset 0 0 50px rgba(255,192,203,0.5);
+            border: 3px solid #ff69b4;
+            position: relative;
+            max-width: 90%;
+        }
+        /* Efek lipatan amplop di belakang kertas */
+        .paper-content::before {
+            content: ''; position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0; border-left: 100px solid transparent; border-right: 100px solid transparent;
+            border-bottom: 20px solid #ff69b4; z-index: -1;
+        }
+
+        /* --- KONTROL GAME --- */
+        .controls { 
+            position: absolute; bottom: 30px; width: 100%; 
+            display: flex; justify-content: space-between; padding: 0 25px; 
+            pointer-events: none; /* Agar tembus pandang */
+        }
+        .move-btns, .jump-btn { pointer-events: auto; /* Tombolnya bisa dipencet */ }
+        .move-btns { display: flex; gap: 15px; }
+        
+        .btn {
+            width: 75px; height: 75px; background: #d28c28; border: 4px solid #5d2e0a; 
+            border-radius: 15px; display: flex; justify-content: center; align-items: center; 
+            font-size: 35px; color: white; box-shadow: 0 6px #3a1d06; cursor: pointer;
+        }
+        .btn:active { transform: translateY(4px); box-shadow: 0 2px #3a1d06; }
+        .jump-btn { background: #4caf50; border-color: #1b5e20; box-shadow: 0 6px #0d2e10; border-radius: 50%; }
+
+        /* Animasi */
+        @keyframes zoomIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="hud">🐟: <span id="score">0</span> | ❤️: <span id="lives">3</span></div>
+    
+    <div id="win-screen">
+        <div id="win-box">
+            <h1> MANTAP SOUL </h1>
+            <p>Skor Akhir: <span id="end-score"></span> Ikan</p>
+            
+            <div class="letter-section">
+                <div class="love-text">JADI APA PROK PROK PROK</div>
+                <div class="envelope-trigger" onclick="openLetter()">💌</div>
+                <p style="font-size: 14px; margin-top: 5px;">(Klik suratnya!)</p>
+                <input type="text" id="input-name" class="name-input" placeholder="Ketik namamu di sini...">
+            </div>
+
+            <button class="restart-btn" onclick="location.reload()">MAIN LAGI</button>
+        </div>
+    </div>
+
+    <div id="zoomed-letter" onclick="closeLetter()">
+        <div class="paper-content">
+            <h1 style="font-family: 'mononoki', cursive; font-size: 50px; margin-bottom: 10px;">egiluyy udh jago main, next main di gn roblox, ciaooo queen WASD</h1>
+            <div style="font-size: 80px;">💖</div>
+            <p style="font-size: 24px;">Untuk: <span id="recipient-name" style="font-weight: bold; text-decoration: underline;"></span></p>
+            <p style="font-size: 16px; color: #666; margin-top: 30px;">(Klik di mana saja untuk menutup)</p>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="controls">
+        <div class="move-btns">
+            <div class="btn" id="leftBtn">←</div>
+            <div class="btn" id="rightBtn">→</div>
+        </div>
+        <div class="btn jump-btn" id="jumpBtn">↑</div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const winScreen = document.getElementById('win-screen');
+    const zoomedLetter = document.getElementById('zoomed-letter');
+
+    let w, h, score = 0, lives = 3, gameActive = true;
+    let cameraX = 0;
+    let keys = { left: false, right: false };
+
+    // --- FUNGSI UNTUK SURAT ---
+    function openLetter() {
+        const name = document.getElementById('input-name').value || "Pemain Hebat";
+        document.getElementById('recipient-name').innerText = name;
+        zoomedLetter.style.display = 'flex';
+    }
+    function closeLetter() {
+        zoomedLetter.style.display = 'none';
+    }
+
+    // --- GAME ENGINE ---
+    const player = {
+        x: 100, y: 0, w: 45, h: 45,
+        velX: 0, velY: 0, speed: 6, jumpForce: 15, gravity: 0.7, grounded: false
+    };
+
+    const goalHouse = { x: 2500, y: 0, w: 100, h: 100 }; // Rumah di ujung
+
+    let platforms = [
+        { x: 0, y: 0, w: 3000, h: 100 }, // Tanah dasar
+        { x: 400, y: 400, w: 150, h: 30 }, { x: 700, y: 300, w: 150, h: 30 },
+        { x: 1000, y: 420, w: 200, h: 30 }, { x: 1300, y: 320, w: 150, h: 30 },
+        { x: 1600, y: 400, w: 200, h: 30 }, { x: 1900, y: 280, w: 250, h: 30 },
+        { x: 2300, y: 350, w: 150, h: 30 }
+    ];
+
+    let enemies = [
+        { x: 800, y: 0, w: 40, h: 40, range: [800, 1100], speed: 2, dir: 1 },
+        { x: 1500, y: 0, w: 40, h: 40, range: [1500, 1800], speed: 3, dir: 1 },
+        { x: 2100, y: 0, w: 40, h: 40, range: [2000, 2200], speed: 4, dir: 1 }
+    ];
+
+    let items = [
+        { x: 450, y: 360, c: false }, { x: 750, y: 260, c: false },
+        { x: 1350, y: 280, c: false }, { x: 2000, y: 240, c: false }
+    ];
+
+    function init() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+        platforms[0].y = h - 100; // Posisi tanah
+        goalHouse.y = h - 200;    // Posisi rumah
+        enemies.forEach(en => en.y = h - 140); // Posisi musuh
+        player.y = h - 200;       // Posisi awal pemain
+    }
+
+    // Input Hybrid (Keyboard & Touch)
+    window.addEventListener('keydown', e => {
+        if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=true;
+        if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=true;
+        if(e.code==='ArrowUp'||e.code==='KeyW'||e.code==='Space') jump();
+    });
+    window.addEventListener('keyup', e => {
+        if(e.code==='ArrowLeft'||e.code==='KeyA') keys.left=false;
+        if(e.code==='ArrowRight'||e.code==='KeyD') keys.right=false;
+    });
+
+    const setupBtn = (id, k) => {
+        const btn = document.getElementById(id);
+        btn.onpointerdown = e => { e.preventDefault(); if(k==='j') jump(); else keys[k]=true; };
+        btn.onpointerup = e => { e.preventDefault(); if(k!=='j') keys[k]=false; };
+    };
+    setupBtn('leftBtn','left'); setupBtn('rightBtn','right'); setupBtn('jumpBtn','j');
+
+    function jump() { if(player.grounded && gameActive) { player.velY = -player.jumpForce; player.grounded=false; }}
+
+    function update() {
+        if(!gameActive) return;
+        
+        // Fisika Player
+        if(keys.left) player.velX = -player.speed; else if(keys.right) player.velX = player.speed; else player.velX *= 0.8;
+        player.velY += player.gravity; player.x += player.velX; player.y += player.velY;
+        player.grounded = false;
+
+        // Kolisi Platform
+        platforms.forEach(p => {
+            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y+player.h > p.y && player.y+player.h < p.y+p.h+player.velY) {
+                if(player.velY > 0) { player.grounded=true; player.velY=0; player.y=p.y-player.h; }
+            }
+        });
+
+        // Musuh & Item
+        enemies.forEach(en => {
+            en.x += en.speed*en.dir; if(en.x>en.range[1]||en.x<en.range[0]) en.dir*=-1;
+            if(Math.abs((player.x+22)-(en.x+20))<30 && Math.abs((player.y+22)-(en.y+20))<30) {
+                lives--; livesEl.innerText=lives; player.x=100; player.y=h-200;
+                if(lives<=0) { alert("yahaha ketabrak guguk, coba lgii,"); location.reload(); }
+            }
+        });
+        items.forEach(it => {
+            if(!it.c && Math.abs(player.x-it.x)<40 && Math.abs(player.y-it.y)<40) { it.c=true; score++; scoreEl.innerText=score; }
+        });
+
+        // Menang jika sampai rumah
+        if(player.x+player.w > goalHouse.x+30 && player.x < goalHouse.x+goalHouse.w-30 && player.y+player.h > goalHouse.y+50) {
+            gameActive = false;
+            document.getElementById('end-score').innerText = score;
+            winScreen.style.display = 'flex';
+        }
+
+        // Kamera
+        cameraX += (player.x - w/3 - cameraX) * 0.1;
+        if(cameraX < 0) cameraX = 0;
+
+        draw(); requestAnimationFrame(update);
+    }
+
+    function draw() {
+        ctx.clearRect(0,0,w,h); ctx.save(); ctx.translate(-cameraX, 0);
+        
+        // Awan Background
+        ctx.fillStyle="rgba(255,255,255,0.6)"; 
+        ctx.beginPath(); ctx.arc(200,100,40,0,Math.PI*2); ctx.arc(250,120,50,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(1200,150,60,0,Math.PI*2); ctx.arc(1280,150,50,0,Math.PI*2); ctx.fill();
+
+        // Platform
+        platforms.forEach(p => {
+            ctx.fillStyle="#8b4513"; ctx.fillRect(p.x,p.y,p.w,p.h);
+            ctx.fillStyle="#2e7d32"; ctx.fillRect(p.x,p.y,p.w,15);
+        });
+
+        // Objek Game
+        ctx.font="80px Arial"; ctx.fillText("🏠", goalHouse.x, goalHouse.y+80);
+        ctx.font="45px Arial"; ctx.fillText("🐱", player.x, player.y+40);
+        enemies.forEach(en => ctx.fillText("🐶", en.x, en.y+35));
+        items.forEach(it => { if(!it.c) ctx.fillText("🐟", it.x, it.y); });
+
+        ctx.restore();
+    }
+
+    window.onresize = init; init(); update();
+</script>
+</body>
+</html>
